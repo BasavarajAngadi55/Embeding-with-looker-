@@ -12,6 +12,9 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@looker/sdk": "^26.12.0",
+    "@looker/sdk-node": "^26.12.0",
+    "@looker/sdk-rtl": "^21.6.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
   }
