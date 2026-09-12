@@ -13,6 +13,6 @@ app.get('/api/status', (req, res) => {
   res.json({ status: 'App is running successfully!' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running at http://localhost:${PORT}`);
 });

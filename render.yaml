@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: my-render-app
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
