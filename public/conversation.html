@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Looker Conversational Analytics</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background-color: #f4f4f9;
+    }
+    .card {
+      background: white;
+      padding: 20px 30px;
+      margin: 20px auto 0;
+      border-radius: 10px;
+      max-width: 900px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    #conversation {
+      width: 100%;
+      height: 90vh;
+      border: 0;
+      display: block;
+      margin-top: 16px;
+    }
+    .error {
+      color: #b00020;
+      text-align: center;
+      padding: 24px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Ask the Data Agent</h1>
+    <p><a href="/">Back to dashboard</a></p>
+  </div>
+  <iframe id="conversation" title="Looker Conversational Analytics"></iframe>
+  <p id="embed-error" class="error"></p>
+
+  <script>
+    fetch('/api/looker-conversation')
+      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+      .then(({ ok, body }) => {
+        if (!ok) {
+          throw new Error(body.error || 'Embed API failed');
+        }
+        document.getElementById('conversation').src = body.url;
+      })
+      .catch((err) => {
+        document.getElementById('embed-error').innerText =
+          'Could not load the conversation: ' + err.message;
+      });
+  </script>
+</body>
+</html>
