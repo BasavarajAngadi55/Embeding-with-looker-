@@ -1,15 +1,81 @@
 # Looker signed SSO embed — reference
 
-This repo is a small Express app that embeds Looker **dashboard 2644** for people who **do not** have a Looker login.
+This repo is a small Express app that embeds Looker content for people who **do not** have a Looker login:
 
-Live example (when env vars are set on Render):  
-https://embeding-with-looker.onrender.com/
+- **Dashboard:** [https://embeding-with-looker.onrender.com/](https://embeding-with-looker.onrender.com/) (`public/index.html`)
+- **Conversational agent:** [https://embeding-with-looker.onrender.com/conversation.html](https://embeding-with-looker.onrender.com/conversation.html)
+
+Both use the **same** signed SSO flow. What changes is the **embed path**, **permissions**, and **Looker Admin extras**.
 
 Official docs:
 
 - [Signed embedding](https://cloud.google.com/looker/docs/signed-embedding)
 - [Create Signed Embed Url API](https://cloud.google.com/looker/docs/reference/looker-api/latest/methods/Auth/create_sso_embed_url)
+- [Embedding Conversational Analytics](https://docs.cloud.google.com/looker/docs/conversational-analytics-looker-embedding)
 - [Embed SDK](https://cloud.google.com/looker/docs/embed-sdk-intro)
+
+---
+
+## Dashboard vs conversational agent — what to change
+
+The backend always calls `create_sso_embed_url`. You only swap **target URL** and **permissions**.
+
+| | **Dashboard** | **Conversational agent** |
+|---|---|---|
+| Visitor URL in this app | `/` | `/conversation.html` |
+| Backend route | `GET /api/looker-embed` | `GET /api/looker-conversation` |
+| Frontend file | `public/index.html` | `public/conversation.html` |
+| Looker content URL | `https://…/dashboards/2644` | `https://…/conversations/{conversation_id}` |
+| **target_url (signed)** | `/embed/dashboards/2644` | `/embed/conversations/{id}` |
+| Env var for content | `LOOKER_DASHBOARD_ID=2644` | `LOOKER_CONVERSATION_ID=e9394641…` (example) |
+| Permissions | `access_data`, `see_looks`, `see_user_dashboards` | Those **plus** `explore`, `gemini_in_looker`, `chat_with_agent`, `chat_with_explore` |
+| Looker Admin extras | Signed embed + allowlist | Same, **plus** Gemini in Looker enabled, Looker 25.18+, **View** access on the **data agent** for the embed user |
+| Allowlist / API keys / embed secret | Same for both | Same for both |
+| `LOOKER_EMBED_DOMAIN` | Same origin (`localhost` or Render URL) | Same |
+
+**Do not change for either type:** API client id/secret, embed secret (stays in Looker), HMAC signing, iframe pattern, `external_user_id`, models (`Datamodel` unless the agent uses other models).
+
+If the agent’s Explores sit on a **different model**, set `LOOKER_MODELS` (comma-separated) to those model names. Permissions are **model-specific**; wrong model = chat 404 / permission error inside the iframe.
+
+### Dashboard-only Looker Admin
+
+1. Enable signed embedding; keep embed secret in Looker.
+2. Allowlist `http://localhost:3000` and `https://embeding-with-looker.onrender.com`.
+3. Confirm dashboard **2644** is visible to model `Datamodel`.
+4. API3 keys for `create_sso_embed_url`.
+
+### Conversational-agent extra Looker Admin
+
+On top of the dashboard list:
+
+1. Gemini in Looker turned on ([setup](https://docs.cloud.google.com/looker/docs/conversational-analytics-looker-setup)).
+2. Conversation id from the URL:  
+   `https://panderasystems.looker.com/conversations/{THIS_ID}`  
+   Embed path is `/embed/conversations/{THIS_ID}` — not the non-embed URL.
+3. Share the **data agent** with the embed user (or a group you put in `group_ids`) at **View**. Model permissions alone are not enough.
+4. Optional: embed all agents at `/embed/agents` or the conversations home at `/embed/conversations` (no id). This demo pins one conversation id.
+
+### Env vars to add for the agent (Render + local)
+
+Already needed for dashboard:
+
+```env
+LOOKERSDK_BASE_URL=https://panderasystems.looker.com
+LOOKERSDK_CLIENT_ID=...
+LOOKERSDK_CLIENT_SECRET=...
+LOOKER_DASHBOARD_ID=2644
+LOOKER_EMBED_DOMAIN=http://localhost:3000
+```
+
+**Add for conversation:**
+
+```env
+LOOKER_CONVERSATION_ID=e9394641252944d4bb0dcc1bcc18615e
+# optional if Explores are not only Datamodel:
+# LOOKER_MODELS=Datamodel
+```
+
+On Render, `LOOKER_EMBED_DOMAIN` must be `https://embeding-with-looker.onrender.com`, and `LOOKER_CONVERSATION_ID` must be set there too (not only in local `.env`).
 
 ---
 
@@ -59,9 +125,9 @@ Copy this into a kickoff. Fill it before writing code.
 ### Looker
 
 6. Looker instance URL? (example: `https://panderasystems.looker.com`)
-7. Dashboard id or LookML id? (example: `2644`)
-8. Which LookML **models**? (example: `Datamodel`)
-9. Which **permissions**? View-only is often `access_data`, `see_looks`, `see_user_dashboards`.
+7. What content? **Dashboard** id, **conversation** id, and/or **agent** id?
+8. Which LookML **models**? (example: `Datamodel`) — agent Explores must be on these models.
+9. Which **permissions**? Dashboard view-only vs Gemini `chat_with_agent` / `chat_with_explore`.
 10. Same data for everyone, or **row-level** by customer?  
     If per customer: `user_attributes` / `access_filters` and usually a **closed system**.
 11. Is **signed embedding** enabled in Admin → Embed?
@@ -90,9 +156,11 @@ Kickoff sentence:
 | **Embed secret** | Stored **in Looker**. The app never has it. Looker uses it to HMAC-sign the URL. |
 | Embed Domain Allowlist | `http://localhost:3000` and `https://embeding-with-looker.onrender.com` |
 | API3 client id + secret | In `.env` / Render env only |
-| Dashboard | `2644` |
-| Model | `Datamodel` |
-| Permissions | `access_data`, `see_looks`, `see_user_dashboards` |
+| Dashboard | `2644` → `/embed/dashboards/2644` |
+| Conversation | env `LOOKER_CONVERSATION_ID` → `/embed/conversations/{id}` |
+| Model | `Datamodel` (override with `LOOKER_MODELS`) |
+| Dashboard permissions | `access_data`, `see_looks`, `see_user_dashboards` |
+| Conversation permissions | dashboard set **plus** `explore`, `gemini_in_looker`, `chat_with_agent`, `chat_with_explore` |
 
 ### App env vars
 
@@ -104,6 +172,7 @@ LOOKERSDK_BASE_URL=https://panderasystems.looker.com
 LOOKERSDK_CLIENT_ID=your_api_client_id
 LOOKERSDK_CLIENT_SECRET=your_api_client_secret
 LOOKER_DASHBOARD_ID=2644
+LOOKER_CONVERSATION_ID=your_conversation_id
 LOOKER_EMBED_DOMAIN=http://localhost:3000
 ```
 
@@ -131,9 +200,10 @@ Embed secret = “this URL is a valid SSO ticket.” Looker keeps the stamp; you
 
 | Piece | File | Job |
 |---|---|---|
-| Backend | `index.js` | Looker SDK, `create_sso_embed_url`, return `{ url }` |
-| Frontend | `public/index.html` | `fetch('/api/looker-embed')`, set `iframe.src` |
-| Secrets | `.env` or Render env | API credentials + embed domain |
+| Backend | `index.js` | `signEmbedUrl()`, `/api/looker-embed`, `/api/looker-conversation` |
+| Dashboard UI | `public/index.html` | `fetch('/api/looker-embed')` |
+| Conversation UI | `public/conversation.html` | `fetch('/api/looker-conversation')` |
+| Secrets | `.env` or Render env | API credentials + ids + embed domain |
 
 Looker UI **Get embed URL**:
 
@@ -161,7 +231,7 @@ This repo does **not** compute HMAC in Node. Looker does it when you call `POST 
 
 ### 1. Backend → Looker API (JSON)
 
-`LookerNodeSDK` sends something like:
+Dashboard example (`/api/looker-embed`):
 
 ```json
 {
@@ -176,6 +246,23 @@ This repo does **not** compute HMAC in Node. Looker does it when you call `POST 
   "access_filters": {},
   "user_attributes": {},
   "embed_domain": "http://localhost:3000"
+}
+```
+
+Conversation example — same fields, different `target_url` and `permissions`:
+
+```json
+{
+  "target_url": "https://panderasystems.looker.com/embed/conversations/YOUR_CONVERSATION_ID",
+  "permissions": [
+    "access_data",
+    "see_looks",
+    "see_user_dashboards",
+    "explore",
+    "gemini_in_looker",
+    "chat_with_agent",
+    "chat_with_explore"
+  ]
 }
 ```
 
@@ -230,7 +317,8 @@ npm install
 node index.js
 ```
 
-Open http://localhost:3000
+- Dashboard: http://localhost:3000  
+- Conversation: http://localhost:3000/conversation.html
 
 `LookerNodeSDK.init40(new NodeSettings('LOOKERSDK'))` reads `LOOKERSDK_*` from the environment. Bare `init40()` looks for `looker.ini` and fails with `Missing required configuration values like base_url`.
 
@@ -256,6 +344,8 @@ Production later: GCP Secret Manager / AWS Secrets Manager inject the **same** e
 | Render: `injected env (0)` + missing Looker vars | Secrets not set in Render Environment |
 | Page red: “Could not load the Looker dashboard” | `/api/looker-embed` 500 (usually missing env) |
 | Iframe blank, API returns a `url` | `X-Frame-Options: SAMEORIGIN` → origin not on **Embed Domain Allowlist**, or `embed_domain` mismatch |
+| Conversation iframe signs (302) then 404 / no agent | Missing Gemini perms, or embed user has no **View** on the data agent |
+| Missing `LOOKER_CONVERSATION_ID` | Set in `.env` and Render Environment |
 | Hardcoded Copy Link URL | Expired / bound to old nonce — always mint a new URL |
 
 ---
@@ -274,9 +364,10 @@ Production later: GCP Secret Manager / AWS Secrets Manager inject the **same** e
 ## Repo map
 
 ```text
-index.js              Express + Looker signed URL API
-public/index.html     Page + iframe
-package.json          express, dotenv, @looker/sdk-node
-render.yaml           Render web service start: node index.js
-.gitignore            node_modules, .env
+index.js                    Express + dashboard + conversation signed URLs
+public/index.html           Dashboard iframe
+public/conversation.html    Conversational Analytics iframe
+package.json                express, dotenv, @looker/sdk-node
+render.yaml                 start: node index.js
+.gitignore                  node_modules, .env
 ```
